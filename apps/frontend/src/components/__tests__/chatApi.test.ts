@@ -172,6 +172,33 @@ describe("submitChatMessage - achievement parsing", () => {
     vi.useRealTimers();
   });
 
+  it("forwards exact quota counters instead of requiring percentage reconstruction", async () => {
+    const onQuotaUpdate = vi.fn();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: "one request consumed" } }],
+      quotaPercent: (1336 / 1337) * 100,
+      quotaRemaining: 1336,
+      quotaTotal: 1337,
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+
+    submitChatMessage({
+      chatMessages: [{ role: "user", content: "hello" }],
+      buddyResult: null,
+      unlockAchievement: vi.fn(),
+      setHistory: vi.fn(),
+      setIsProcessing: vi.fn(),
+      currentRank: "Junior Code Monkey",
+      onQuotaUpdate,
+    });
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(onQuotaUpdate).toHaveBeenCalledWith((1336 / 1337) * 100, 1336, 1337);
+  });
+
   it("extracts single achievement from response", async () => {
     const unlockAchievement = vi.fn();
     const setHistory = vi.fn();

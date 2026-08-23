@@ -152,6 +152,8 @@ describe("consumeQuota", () => {
     const result = await consumeQuota(kv, { tier: "free", sessionId: "s1" });
     // (20-1)/20 * 100 = 95%
     expect(result.quotaPercent).toBe(95);
+    expect(result.remaining).toBe(19);
+    expect(result.total).toBe(20);
     expect(store["free:s1"]).toBe("1");
   });
 
@@ -186,6 +188,8 @@ describe("consumeQuota", () => {
     });
     // (50-41)/50 * 100 = 18%
     expect(result.quotaPercent).toBe(18);
+    expect(result.remaining).toBe(9);
+    expect(result.total).toBe(50);
     expect(store["free:s1"]).toBe("41");
   });
 
@@ -223,6 +227,8 @@ describe("consumeQuota", () => {
     });
     // After decrement: 499/500 * 100 = 99.8
     expect(result.quotaPercent).toBeCloseTo(99.8);
+    expect(result.remaining).toBe(499);
+    expect(result.total).toBe(500);
     expect(store["polar:hash1"]).toBe("499");
   });
 });

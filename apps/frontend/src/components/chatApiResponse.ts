@@ -21,6 +21,8 @@ type ParsedResponse = {
   tokensReceived?: number;
   cost?: number;
   quotaPercent?: number;
+  quotaRemaining?: number;
+  quotaTotal?: number;
   shareClaim?: string;
 };
 
@@ -84,17 +86,21 @@ function extractJsonResponseFields(data: Record<string, unknown>): ParsedRespons
   const rawReply = choices?.[0]?.message?.content ?? "";
   const usage = data?.usage as { prompt_tokens?: number; completion_tokens?: number; cost?: number; total_cost?: number } | undefined;
   const quotaPercent = typeof data?.quotaPercent === "number" ? data.quotaPercent : undefined;
+  const quotaRemaining = typeof data?.quotaRemaining === "number" ? data.quotaRemaining : undefined;
+  const quotaTotal = typeof data?.quotaTotal === "number" ? data.quotaTotal : undefined;
   return {
     rawReply,
     tokensSent: usage?.prompt_tokens,
     tokensReceived: usage?.completion_tokens,
     cost: usage?.cost ?? usage?.total_cost,
     quotaPercent,
+    quotaRemaining,
+    quotaTotal,
     shareClaim: typeof data?.shareClaim === "string" ? data.shareClaim : undefined,
   };
 }
 
-function extractStreamFields(usage: StreamResult["usage"]): Omit<ParsedResponse, "rawReply" | "quotaPercent"> {
+function extractStreamFields(usage: StreamResult["usage"]): Omit<ParsedResponse, "rawReply" | "quotaPercent" | "quotaRemaining" | "quotaTotal"> {
   return {
     tokensSent: usage?.prompt_tokens,
     tokensReceived: usage?.completion_tokens,

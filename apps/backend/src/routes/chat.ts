@@ -1644,6 +1644,12 @@ chat.post("/", async (c) => {
 
   const quotaResult = await consumeQuotaPostSuccess(c.env, sessionId, billingProKeyHash);
   const quotaPercent = quotaResult.quotaPercent;
+  if (quotaResult.remaining != null) {
+    (data as Record<string, unknown>).quotaRemaining = quotaResult.remaining;
+  }
+  if (quotaResult.total != null) {
+    (data as Record<string, unknown>).quotaTotal = quotaResult.total;
+  }
   if (billingProKeyHash && quotaResult.remaining != null) {
     c.executionCtx.waitUntil(mirrorPolarUsage(c.env, billingProKeyHash, quotaResult.remaining));
   }
