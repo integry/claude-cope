@@ -167,9 +167,9 @@ describe("TerminalView ticker shortcuts", () => {
     });
 
     expect(closeAllOverlaysPreservingNag).toHaveBeenCalledTimes(3);
-    expect(runSlashCommand).toHaveBeenNthCalledWith(1, "/who");
-    expect(runSlashCommand).toHaveBeenNthCalledWith(2, "/party");
-    expect(runSlashCommand).toHaveBeenNthCalledWith(3, "/leaderboard");
+    expect(runSlashCommand).toHaveBeenNthCalledWith(1, "/who", "ui");
+    expect(runSlashCommand).toHaveBeenNthCalledWith(2, "/party", "ui");
+    expect(runSlashCommand).toHaveBeenNthCalledWith(3, "/leaderboard", "ui");
   });
 
 });

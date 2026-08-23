@@ -76,7 +76,7 @@ interface Harness {
   setIdle(idle: boolean): void;
 }
 
-function makeHarness(): Harness {
+function makeHarness(criticalAlertEffectsEnabled = true): Harness {
   let idle = false;
   const state: HarnessState = {
     history: createMockState<Message[]>([]),
@@ -118,6 +118,7 @@ function makeHarness(): Harness {
       applyOutageReward,
       applyOutagePenalty,
       isUserIdle: () => idle,
+      criticalAlertEffectsEnabled,
     },
   };
 }
@@ -343,6 +344,22 @@ describe("applyServerMessage", () => {
   });
 
   // ── outage — idle-guard invariants ──────────────────────────────────
+
+  it("ignores all outage effects while critical alerts are disabled", () => {
+    const disabled = makeHarness(false);
+
+    applyServerMessage({ type: "outage_start", hp: 100, scenario: TEST_OUTAGE_SCENARIO }, disabled.handlers);
+    applyServerMessage({ type: "outage_update", hp: 42, scenario: TEST_OUTAGE_SCENARIO }, disabled.handlers);
+    applyServerMessage({ type: "outage_cleared", scenario: TEST_OUTAGE_SCENARIO }, disabled.handlers);
+    applyServerMessage({ type: "outage_failed", scenario: TEST_OUTAGE_SCENARIO }, disabled.handlers);
+
+    expect(disabled.state.outageHp.value).toBeNull();
+    expect(disabled.state.activeOutageScenario.value).toBeNull();
+    expect(disabled.state.deferredOutage.current).toBeNull();
+    expect(disabled.state.history.value).toHaveLength(0);
+    expect(disabled.applyOutageReward).not.toHaveBeenCalled();
+    expect(disabled.applyOutagePenalty).not.toHaveBeenCalled();
+  });
 
   it("outage_start (active): sets HP and pushes the critical alert", () => {
     applyServerMessage({ type: "outage_start", hp: 100, scenario: TEST_OUTAGE_SCENARIO }, h.handlers);

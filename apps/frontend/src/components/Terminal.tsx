@@ -5,7 +5,7 @@ import { useGameState, Message } from "../hooks/useGameState";
 import { isFreeUser, isPaidUser } from "../hooks/gameStateUtils";
 import { computeBuddyInterjection, mergeSuggestedReply, submitChatMessage } from "./chatApi";
 import { BYOK_ENABLED } from "../config";
-import { executeSlashCommand } from "./slashCommandExecutor";
+import { executeSlashCommand, type SlashCommandInvocationSource } from "./slashCommandExecutor";
 import { applyAuthoritativeProfile as mergeAuthoritativeProfile, applyServerProfile, settlePendingCompletedRewards } from "../hooks/profileSync";
 import { handleKeyCommand } from "./keyCommandHandler";
 import { fetchRandomTicketPrompt } from "./ticketPrompt";
@@ -197,13 +197,13 @@ function Terminal() {
     const rollback = pendingBacklogRollbacksRef.current.get(rollbackId); if (!rollback) return; pendingBacklogRollbacksRef.current.delete(rollbackId); if (shouldRollback) rollback();
   }, []);
   const recordValidatedSlashCommand = useCallback((baseCommand: string) => { if (baseCommand === "/clear") return void recordValidCommand(baseCommand, { suppressTip: true }); recordValidCommand(baseCommand); }, [recordValidCommand]);
-  const runSlashCommand = useCallback((command: string) => {
+  const runSlashCommand = useCallback((command: string, source: SlashCommandInvocationSource = "typed") => {
     executeSlashCommand(command, {
       state, setState, setHistory, setIsProcessing, closeAllOverlays: closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms,
       setShowContact, setShowProfile, setShowParty, setShowUpgrade, setBragPending, setBuddyPendingConfirm, unlockAchievement: unlockAchievementWithSound, clearCount, setClearCount, setInputValue, onSuggestedReply: handleSuggestedReply,
       setSlashQuery, setSlashIndex, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, brrrrrrIntervalRef, triggerCompactEffect: () => { setCompactEffect(true); setTimeout(() => setCompactEffect(false), 500); },
       playChime, playError, setActiveTheme, onValidSlashCommand: recordValidatedSlashCommand,
-    });
+    }, { source });
   }, [state, setState, setHistory, setIsProcessing, closeAllOverlaysAndRestoreNag, setShowStore, setShowLeaderboard, setShowAchievements, setShowSynergize, setShowHelp, setShowAbout, setShowPrivacy, setShowTerms, setShowContact, setShowProfile, setShowParty, setShowUpgrade, unlockAchievementWithSound, clearCount, addActiveTD, onlineCount, onlineUsers, sendPing, pendingReviewPing, acceptReviewPing, playChime, playError, setActiveTheme, handleSuggestedReply, recordValidatedSlashCommand]);
   const runSlashCommandRef = useRef(runSlashCommand);
   runSlashCommandRef.current = runSlashCommand;
@@ -211,11 +211,11 @@ function Terminal() {
   const handlePromptAccepted = useCallback((rollbackId: number, replayId: number | null) => { settlePendingBacklogRollback(rollbackId, false); settleAcceptedNagReplay(replayId); }, [settleAcceptedNagReplay, settlePendingBacklogRollback]);
   const handlePromptError = useCallback((rollbackId: number) => { settlePendingBacklogRollback(rollbackId, true); playError(); }, [playError, settlePendingBacklogRollback]);
   const handleSlashCommandClick = useCallback((command: string, action: SlashCommandAction) => {
-    const nextSelection = getSlashCommandClickSelection(command, action); if (nextSelection.mode === "execute") return void runSlashCommandRef.current(nextSelection.value);
+    const nextSelection = getSlashCommandClickSelection(command, action); if (nextSelection.mode === "execute") return void runSlashCommandRef.current(nextSelection.value, "ui");
     setInputValue(nextSelection.value); setSlashQuery(nextSelection.nextQuery); setSlashIndex(0); setPersistedSuggestedReply(null); if (!isMobileViewport) inputRef.current?.focus();
   }, [isMobileViewport, setPersistedSuggestedReply]);
   const handleSlashMenuSelect = useCallback((command: string) => {
-    const nextSelection = resolveSlashMenuSelection(command, "click"); if (nextSelection.mode === "execute") return void runSlashCommandRef.current(nextSelection.value);
+    const nextSelection = resolveSlashMenuSelection(command, "click"); if (nextSelection.mode === "execute") return void runSlashCommandRef.current(nextSelection.value, "ui");
     setInputValue(nextSelection.value); setSlashQuery(nextSelection.nextQuery); setSlashIndex(0); setPersistedSuggestedReply(null); if (!isMobileViewport) inputRef.current?.focus();
   }, [isMobileViewport, setPersistedSuggestedReply]);
   const handleBuddyInterjection = useCallback((buddyResult: ReturnType<typeof computeBuddyInterjection>) => { if (state.buddy.type) setState((prev) => ({ ...prev, buddy: { ...prev.buddy, promptsSinceLastInterjection: buddyResult ? 0 : prev.buddy.promptsSinceLastInterjection + 1 } })); }, [state.buddy.type, setState]);

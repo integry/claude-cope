@@ -19,8 +19,8 @@ vi.mock("../ticketPrompt", () => ({
   buildTicketMessage: vi.fn(),
 }));
 
-import { handleUpgradeCommand, type SlashCommandContext } from "../slashCommandExecutor";
-import type { GameState } from "../../hooks/useGameState";
+import { executeSlashCommand, handleUpgradeCommand, type SlashCommandContext } from "../slashCommandExecutor";
+import type { GameState, Message } from "../../hooks/useGameState";
 
 function makeGameState(overrides: Partial<GameState> = {}): GameState {
   const base: GameState = {
@@ -171,5 +171,57 @@ describe("/upgrade command", () => {
     // setHistory is called with a filter function (clearLoading)
     expect(ctx.setHistory).toHaveBeenCalledOnce();
     expect(typeof (ctx.setHistory as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toBe("function");
+  });
+
+  it("opens UI-invoked overlays immediately without echoing the command", () => {
+    const ctx = makeCtx();
+
+    executeSlashCommand("/upgrade", ctx, { source: "ui" });
+
+    expect(ctx.setShowUpgrade).toHaveBeenCalledWith(true);
+    expect(ctx.setIsProcessing).toHaveBeenNthCalledWith(1, true);
+    expect(ctx.setIsProcessing).toHaveBeenLastCalledWith(false);
+    expect(ctx.setHistory).toHaveBeenCalledOnce();
+    const clearLoading = (ctx.setHistory as ReturnType<typeof vi.fn>).mock.calls[0]![0] as (history: Message[]) => Message[];
+    expect(clearLoading([])).toEqual([]);
+  });
+
+  it.each([
+    ["/who", "setShowParty"],
+    ["/party", "setShowParty"],
+    ["/leaderboard", "setShowLeaderboard"],
+  ] as const)("runs the %s UI shortcut synchronously without a user-command echo", (command, opener) => {
+    let history: Message[] = [];
+    const setHistory = vi.fn((action: React.SetStateAction<Message[]>) => {
+      history = typeof action === "function" ? action(history) : action;
+    });
+    const ctx = makeCtx({ setHistory });
+
+    executeSlashCommand(command, ctx, { source: "ui" });
+
+    expect(ctx.setIsProcessing).toHaveBeenLastCalledWith(false);
+    expect(history.some((message) => message.role === "user" || message.role === "loading")).toBe(false);
+    if (command !== "/who") expect(ctx[opener]).toHaveBeenCalledWith(true);
+  });
+
+  it("keeps typed popup commands in the terminal and applies the normal delay", () => {
+    vi.useFakeTimers();
+    try {
+      let history: Message[] = [];
+      const setHistory = vi.fn((action: React.SetStateAction<Message[]>) => {
+        history = typeof action === "function" ? action(history) : action;
+      });
+      const ctx = makeCtx({ setHistory });
+
+      executeSlashCommand("/party", ctx);
+
+      expect(history.map((message) => message.role)).toEqual(["user", "loading"]);
+      expect(ctx.setShowParty).not.toHaveBeenCalled();
+
+      vi.runAllTimers();
+      expect(ctx.setShowParty).toHaveBeenCalledWith(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

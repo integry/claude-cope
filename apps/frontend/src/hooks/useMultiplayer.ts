@@ -6,6 +6,7 @@ import type {
   OutageScenario,
   ServerMessage,
 } from '@claude-cope/shared/multiplayer-types';
+import { CRITICAL_ALERT_EFFECTS_ENABLED } from '../config';
 
 export interface DeferredOutageState {
   hp: number;
@@ -159,6 +160,7 @@ export interface ServerMessageHandlers {
   applyOutageReward: () => void;
   applyOutagePenalty: () => void;
   isUserIdle: () => boolean;
+  criticalAlertEffectsEnabled: boolean;
 }
 
 function handleReviewMessage(data: ServerMessage, h: ServerMessageHandlers): boolean {
@@ -244,6 +246,12 @@ function handleReviewMessage(data: ServerMessage, h: ServerMessageHandlers): boo
 }
 
 function handleOutageMessage(data: ServerMessage, h: ServerMessageHandlers): boolean {
+  if (!h.criticalAlertEffectsEnabled) {
+    return data.type === 'outage_start'
+      || data.type === 'outage_update'
+      || data.type === 'outage_cleared'
+      || data.type === 'outage_failed';
+  }
   if (data.type === 'outage_start') {
     if (h.isUserIdle()) {
       h.setDeferredOutageState({ hp: data.hp, scenario: data.scenario });
@@ -336,7 +344,7 @@ export function useMultiplayer({ username, setHistory, applyOutageReward, applyO
     const markActive = () => {
       const wasIdle = document.hidden || Date.now() - lastActivityAt.current > IDLE_THRESHOLD_MS;
       lastActivityAt.current = Date.now();
-      if (wasIdle && !document.hidden) {
+      if (CRITICAL_ALERT_EFFECTS_ENABLED && wasIdle && !document.hidden) {
         revealDeferredOutage({
           deferredOutage: deferredOutageRef.current,
           setDeferredOutageState: (next) => { deferredOutageRef.current = next; },
@@ -381,6 +389,7 @@ export function useMultiplayer({ username, setHistory, applyOutageReward, applyO
           applyOutageReward,
           applyOutagePenalty,
           isUserIdle,
+          criticalAlertEffectsEnabled: CRITICAL_ALERT_EFFECTS_ENABLED,
         });
       } catch {
         console.error('Failed to parse multiplayer message');
@@ -404,7 +413,9 @@ export function useMultiplayer({ username, setHistory, applyOutageReward, applyO
     sendMessage({ type: 'accept_review_ping' });
   };
   // Expose a method to allow players to attack the outage
-  const sendDamage = (command: string) => sendMessage({ type: 'damage_outage', command });
+  const sendDamage = (command: string) => {
+    if (CRITICAL_ALERT_EFFECTS_ENABLED) sendMessage({ type: 'damage_outage', command });
+  };
 
   return {
     onlineCount,

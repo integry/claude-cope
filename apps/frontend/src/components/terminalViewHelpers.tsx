@@ -6,6 +6,7 @@ import type { GameState, Message } from "../hooks/useGameState";
 import type { OverlayVisibility } from "./terminalViewUtils";
 import type { UpgradeNagCloseEffect } from "./UpgradeOverlay";
 import type { OutageScenario } from "@claude-cope/shared/multiplayer-types";
+import type { SlashCommandInvocationSource } from "./slashCommandExecutor";
 
 type OverlaySetter = Dispatch<SetStateAction<boolean>>;
 
@@ -47,7 +48,7 @@ export type TerminalViewProps = OverlayVisibility & {
   slashQuery: string;
   slashIndex: number;
   handleSlashMenuSelect: (command: string) => void;
-  runSlashCommand: (command: string) => void;
+  runSlashCommand: (command: string, source?: SlashCommandInvocationSource) => void;
   inputValue: string;
   suggestedReply: string | null;
   acceptSuggestedReply: (options?: { submit?: boolean }) => void;
@@ -137,11 +138,11 @@ export function createUpgradeOpener(
 
 export function createTickerCommandRunner(
   closeAllOverlaysPreservingNag: () => void,
-  runSlashCommand: (command: string) => void,
+  runSlashCommand: (command: string, source?: SlashCommandInvocationSource) => void,
 ) {
   return (command: string) => {
     closeAllOverlaysPreservingNag();
-    runSlashCommand(command);
+    runSlashCommand(command, "ui");
   };
 }
 
@@ -165,7 +166,7 @@ export function buildTerminalOpeners(args: {
   setSlashIndex: Dispatch<SetStateAction<number>>;
   isMobileViewport: boolean;
   inputRef: RefObject<HTMLInputElement | null>;
-  runSlashCommand: (command: string) => void;
+  runSlashCommand: (command: string, source?: SlashCommandInvocationSource) => void;
 }) {
   const {
     closeAllOverlaysPreservingNag,

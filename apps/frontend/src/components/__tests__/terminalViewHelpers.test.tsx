@@ -52,7 +52,7 @@ describe("terminalViewHelpers", () => {
     expect(setSlashQuery).toHaveBeenCalledWith("/");
     expect(setSlashIndex).toHaveBeenCalledWith(0);
     expect(inputRef.current.focus).toHaveBeenCalledTimes(1);
-    expect(runSlashCommand).toHaveBeenCalledWith("/party");
+    expect(runSlashCommand).toHaveBeenCalledWith("/party", "ui");
   });
 
   it("focuses the terminal input only when desktop, no overlays are open, and no text is selected", () => {

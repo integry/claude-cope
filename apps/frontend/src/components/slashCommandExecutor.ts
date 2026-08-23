@@ -72,6 +72,31 @@ type SlashCommandAccountingOptions = {
   notifyValidSlashCommand?: boolean;
 };
 
+export type SlashCommandInvocationSource = "typed" | "ui";
+
+export interface SlashCommandExecutionOptions {
+  source?: SlashCommandInvocationSource;
+}
+
+// UI links for these commands should behave like navigation controls: open
+// immediately and do not echo a pretend typed command into the terminal.
+const INSTANT_UI_SLASH_COMMANDS = new Set([
+  "/who",
+  "/store",
+  "/synergize",
+  "/help",
+  "/about",
+  "/privacy",
+  "/terms",
+  "/contact",
+  "/upgrade",
+  "/leaderboard",
+  "/achievements",
+  "/profile",
+  "/user",
+  "/party",
+]);
+
 export const SLASH_COMMAND_ACCOUNTING_POLICY: Record<SupportedSlashCommand, SlashCommandAccountingPolicy> = {
   "/backlog": "tracked",
   "/take": "conditional",
@@ -1208,11 +1233,15 @@ export function rollBuddy(
 export function executeSlashCommand(
   command: string,
   ctx: SlashCommandContext,
+  options: SlashCommandExecutionOptions = {},
 ) {
   ctx.setInputValue("");
   ctx.setSlashQuery("");
   ctx.setSlashIndex(0);
   ctx.setIsProcessing(true);
+
+  const baseCommand = parseBaseCommand(command);
+  const isInstantUiCommand = options.source === "ui" && INSTANT_UI_SLASH_COMMANDS.has(baseCommand);
 
   // Obfuscate API keys and license keys in terminal history
   let displayCommand = command;
@@ -1228,11 +1257,13 @@ export function executeSlashCommand(
     }
   }
 
-  ctx.setHistory((prev) => [
-    ...prev,
-    { role: "user", content: displayCommand },
-    { role: "loading", content: getRandomLoadingPhrase() },
-  ]);
+  if (!isInstantUiCommand) {
+    ctx.setHistory((prev) => [
+      ...prev,
+      { role: "user", content: displayCommand },
+      { role: "loading", content: getRandomLoadingPhrase() },
+    ]);
+  }
 
   const pendingAccounting = new Map<string, SlashCommandAccountingOptions | undefined>();
   const flushPendingAccounting = (): void => {
@@ -1247,7 +1278,6 @@ export function executeSlashCommand(
     ctx.setHistory((prev) => [...clearLoading(prev), msg]);
   };
 
-  const baseCommand = parseBaseCommand(command);
   const accountingPolicy = getSlashCommandAccountingPolicy(baseCommand);
   const accountingCtx: SlashCommandContext = {
     ...ctx,
@@ -1291,7 +1321,7 @@ export function executeSlashCommand(
     return;
   }
 
-  setTimeout(() => {
+  const dispatch = () => {
     const exitCommands = ["exit", "quit", "/exit", "/quit"];
     if (exitCommands.includes(command.toLowerCase())) {
       ctx.unlockAchievement("the_final_escape");
@@ -1302,7 +1332,14 @@ export function executeSlashCommand(
     // longer depend on reply() side effects to record command usage.
     if (dispatchCommand(command, accountingCtx, reply) === "async") return;
     accountingCtx.finalizeSlashCommand?.();
-  }, Math.floor(Math.random() * 1500) + 1500);
+  };
+
+  if (isInstantUiCommand) {
+    dispatch();
+    return;
+  }
+
+  setTimeout(dispatch, Math.floor(Math.random() * 1500) + 1500);
 }
 
 export { parseSabotageParams } from "./sabotageParams";

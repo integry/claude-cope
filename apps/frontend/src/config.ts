@@ -68,6 +68,13 @@ export const TICKET_REFINE_ENABLED = parseBoolEnv(
 );
 
 /**
+ * Global outage/critical-alert effects are temporarily paused. Keep this as a
+ * source-level switch so the existing multiplayer implementation can be
+ * restored without rebuilding the feature.
+ */
+export const CRITICAL_ALERT_EFFECTS_ENABLED = false;
+
+/**
  * Checkout URLs for the upgrade overlay. Operators set these to point at their
  * payment provider (e.g. Polar, Stripe). When a URL is empty/unset the
  * corresponding button is disabled with a terminal-style error message.
