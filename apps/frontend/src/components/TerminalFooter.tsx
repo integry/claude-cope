@@ -13,7 +13,7 @@ export function TerminalFooter({ closeAllOverlays, buddyType, buddyIsShiny, setS
 }) {
   return (
     <>
-      <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-1 backdrop-blur-sm font-mono hidden sm:flex sm:flex-col gap-1" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}>
+      <footer className="shrink-0 hidden w-full gap-1 pt-2 pb-1 font-mono text-xs text-gray-400/80 backdrop-blur-sm sm:flex sm:flex-col" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}>
         <div className="flex items-center justify-between gap-4">
           <span><span className="text-gray-400">[LEGAL]</span> This is a parody project and is not affiliated with Anthropic... yet.</span>
           <BuddyWatcherStatus type={buddyType} isShiny={buddyIsShiny} />
@@ -27,10 +27,10 @@ export function TerminalFooter({ closeAllOverlays, buddyType, buddyIsShiny, setS
           <span className="flex gap-4">{[["https://github.com/integry/claude-cope", "/github"], ["https://reddit.com/r/CopeBot", "/reddit"]].map(([href, label]) => (<a key={label} href={href} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">{label}</a>))}</span>
         </div>
       </footer>
-      <footer className="shrink-0 w-full text-xs text-gray-500 pt-2 pb-2 backdrop-blur-sm font-mono sm:hidden" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}>
+      <footer className="shrink-0 w-full pt-2 pb-2 font-mono text-xs text-gray-400/80 backdrop-blur-sm sm:hidden" style={{ backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)' }}>
         <div className={`text-left ${buddyType ? "terminal-footer-mobile-with-buddy" : ""}`}>
           {buddyType ? <BuddyDisplay type={buddyType} isShiny={buddyIsShiny} className="terminal-footer-mobile-buddy" /> : null}
-          <div className={`leading-tight text-[10px] text-gray-500 ${buddyType ? "terminal-footer-mobile-copy" : ""}`}>
+          <div className={`text-[10px] leading-tight text-gray-400/80 ${buddyType ? "terminal-footer-mobile-copy" : ""}`}>
             {buddyType ? <BuddyWatcherStatus type={buddyType} isShiny={buddyIsShiny} className="terminal-buddy-status-left terminal-footer-mobile-status text-[11px] leading-tight" /> : null}
             <span>
               Parody project, no Anthropic affiliation... yet.

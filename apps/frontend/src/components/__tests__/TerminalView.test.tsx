@@ -171,4 +171,5 @@ describe("TerminalView ticker shortcuts", () => {
     expect(runSlashCommand).toHaveBeenNthCalledWith(2, "/party");
     expect(runSlashCommand).toHaveBeenNthCalledWith(3, "/leaderboard");
   });
+
 });

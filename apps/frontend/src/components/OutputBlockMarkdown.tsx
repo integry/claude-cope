@@ -7,7 +7,7 @@ import type { SlashCommandAction } from "./slashCommandDetect";
 type TagCategory = "ERROR" | "WARN" | "SUCCESS" | "INFO" | "EXECUTIVE";
 
 const TAG_STYLES: Record<TagCategory, string> = {
-  ERROR: "text-red-400",
+  ERROR: "text-[#ff5555]",
   WARN: "text-yellow-400",
   SUCCESS: "text-green-400",
   INFO: "text-blue-400",
@@ -99,7 +99,7 @@ function renderLineWithTags(line: string, onSlashCommand?: (command: string, act
     const category = inlineMatch[1] as TagCategory;
     const tagText = inlineMatch[2];
     parts.push(
-      <span key={inlineMatch.index} className={`${TAG_STYLES[category]} font-mono text-xs font-bold mr-2`}>
+      <span key={inlineMatch.index} className={`${TAG_STYLES[category]} mr-2 font-mono text-xs font-bold tracking-[0.05em]`}>
         {tagText}
       </span>
     );
@@ -118,7 +118,7 @@ function renderLineWithTags(line: string, onSlashCommand?: (command: string, act
     const colorClass = isReward ? "text-green-300" : TAG_STYLES[category];
     return (
       <>
-        <span className={`${colorClass} font-mono ${sizeClass} font-bold mr-2`}>
+        <span className={`${colorClass} mr-2 font-mono ${sizeClass} font-bold tracking-[0.05em]`}>
           {bracketMatch[1]}
         </span>
         {renderInlineText(line.slice(bracketMatch[0].length))}
@@ -269,7 +269,7 @@ export function buildMarkdownComponents(
         const category = tagMatch[1] as TagCategory;
         const tagText = tagMatch[2];
         return (
-          <span className={`${TAG_STYLES[category]} px-1.5 py-0 font-mono text-xs font-bold mr-2 inline-block`}>
+          <span className={`${TAG_STYLES[category]} mr-2 inline-block px-1.5 py-0 font-mono text-xs font-bold tracking-[0.05em]`}>
             {tagText}
           </span>
         );

@@ -75,7 +75,7 @@ const roleColors: Record<Message["role"], string> = {
   system: "text-gray-100",
   loading: "text-yellow-400",
   warning: "text-yellow-400",
-  error: "text-red-500",
+  error: "text-[#ff5555]",
 };
 
 function Spinner() {

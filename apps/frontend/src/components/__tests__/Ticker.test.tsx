@@ -48,6 +48,7 @@ describe("Ticker", () => {
     expect(container.textContent).toContain("[/who]");
     expect(container.textContent).toContain("Firehose [/party]");
     expect(container.textContent).toContain("Hall of Blame [/leaderboard]");
+    expect(Array.from(container.querySelectorAll("span[aria-hidden='true']")).map((span) => span.textContent)).toEqual([" | ", " | "]);
   });
 
   it("routes top-right clicks through slash commands without expanding the ticker", () => {

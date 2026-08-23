@@ -41,14 +41,16 @@ export async function checkQuotaAvailable(
 /** Consume quota AFTER a successful generation. Returns quota info or an error message. */
 export async function consumeQuotaPostSuccess(
   env: EnvBindings, sessionId: string, proKeyHash?: string,
-): Promise<{ quotaPercent: number; remaining?: number; exhaustedMessage?: string }> {
+): Promise<{ quotaPercent: number; remaining?: number; total?: number; exhaustedMessage?: string }> {
   const quotaKv = env.QUOTA_KV ?? env.USAGE_KV;
-  if (!quotaKv) return { quotaPercent: 100 };
+  const limits = getQuotaLimits(env);
+  const total = proKeyHash ? limits.proInitialQuota : limits.freeLimit;
+  if (!quotaKv) return { quotaPercent: 100, remaining: total, total };
   try {
-    const result = await consumeQuota(quotaKv, { tier: proKeyHash ? "pro" : "free", sessionId, licenseKeyHash: proKeyHash, limits: getQuotaLimits(env) });
-    return { quotaPercent: result.quotaPercent, remaining: result.remaining };
+    const result = await consumeQuota(quotaKv, { tier: proKeyHash ? "pro" : "free", sessionId, licenseKeyHash: proKeyHash, limits });
+    return { quotaPercent: result.quotaPercent, remaining: result.remaining, total: result.total };
   } catch (err) {
-    if (err instanceof QuotaExhaustedError) return { quotaPercent: 0, exhaustedMessage: err.message };
+    if (err instanceof QuotaExhaustedError) return { quotaPercent: 0, remaining: 0, total, exhaustedMessage: err.message };
     throw err;
   }
 }

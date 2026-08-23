@@ -74,7 +74,7 @@ type SubmitChatMessageBaseOpts = {
   inventory?: Record<string, number>;
   upgrades?: string[];
   onByokUsage?: (usage: { model: string; prompt_tokens?: number; completion_tokens?: number; cost?: number }) => void;
-  onQuotaUpdate?: (quotaPercent: number) => void;
+  onQuotaUpdate?: (quotaPercent: number, quotaRemaining?: number, quotaTotal?: number) => void;
   onQuotaExhausted?: () => void;
   onProfileUpdate?: (profile: ServerProfile) => void;
   onError?: () => void;
@@ -312,7 +312,7 @@ export function submitChatMessage(opts: SubmitChatMessageOpts) {
 
       const parsed = await parseChatResponseBody(res, setHistory, loadingMessageId, opts.addActiveTD, opts.onProfileUpdate);
       let { rawReply } = parsed;
-      const { tokensSent, tokensReceived, cost, quotaPercent, shareClaim } = parsed;
+      const { tokensSent, tokensReceived, cost, quotaPercent, quotaRemaining, quotaTotal, shareClaim } = parsed;
 
       // Track BYOK usage (full stats per model)
       if (isBYOK && opts.onByokUsage) {
@@ -321,7 +321,7 @@ export function submitChatMessage(opts: SubmitChatMessageOpts) {
 
       // Fire quota update for non-BYOK users when quotaPercent is present
       if (!isBYOK && quotaPercent != null && opts.onQuotaUpdate) {
-        opts.onQuotaUpdate(quotaPercent);
+        opts.onQuotaUpdate(quotaPercent, quotaRemaining, quotaTotal);
       }
 
       if (!rawReply) {

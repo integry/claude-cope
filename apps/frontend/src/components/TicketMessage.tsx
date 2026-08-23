@@ -22,12 +22,12 @@ function DossierField({
   stackOnMobile?: boolean;
 }) {
   const rowClassName = stackOnMobile
-    ? "flex flex-col gap-1 md:grid md:grid-cols-[5.5rem_minmax(0,1fr)] md:gap-3"
-    : "grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3";
+    ? "flex flex-col gap-1 md:grid md:grid-cols-[8.25rem_minmax(0,1fr)] md:gap-0"
+    : "grid grid-cols-[8.25rem_minmax(0,1fr)] gap-0";
 
   return (
     <div className={rowClassName}>
-      <div className="text-slate-400">{label}</div>
+      <div className="pr-4 text-slate-400">{label}</div>
       <div className={valueClassName}>{value}</div>
     </div>
   );
@@ -42,11 +42,11 @@ export function TicketMessage({
 }) {
   return (
     <div className="max-w-full font-mono text-[13px] leading-relaxed text-cyan-100 md:pr-3">
-      <div className="border-y border-dashed border-cyan-400/60 py-2">
-        <div className="text-cyan-200">{ticket.heading}</div>
+      <div className="my-1 border-y border-dashed border-cyan-400/60 py-2.5">
+        <div className="tracking-[0.05em] text-cyan-200 [text-shadow:0_0_2px_rgba(34,211,238,0.45)]">{ticket.heading}</div>
       </div>
 
-      <div className="space-y-2 border-b border-dashed border-cyan-400/40 py-3">
+      <div className="my-1 space-y-2 border-b border-dashed border-cyan-400/40 py-3">
         <DossierField label="ID:" value={ticket.ticketId} valueClassName="text-cyan-200" />
         <DossierField label="TITLE:" value={ticket.title} valueClassName="text-white" stackOnMobile />
         <DossierField label="REPORTER:" value={ticket.reporter} valueClassName="text-cyan-300" stackOnMobile />
@@ -55,15 +55,15 @@ export function TicketMessage({
         )}
       </div>
 
-      <div className="border-b border-dashed border-cyan-400/40 py-3">
+      <div className="my-1 border-b border-dashed border-cyan-400/40 py-3">
         <DossierField
           label="DESCRIPTION:"
-          value={<div className="whitespace-pre-wrap break-words text-cyan-100 [overflow-wrap:anywhere]">{ticket.body}</div>}
+          value={<div className="whitespace-pre-wrap break-words leading-[1.45] text-cyan-100 [overflow-wrap:anywhere] md:max-w-[72ch]">{ticket.body}</div>}
           stackOnMobile
         />
       </div>
 
-      <div className="border-b border-dashed border-cyan-400/40 py-3">
+      <div className="my-1 border-b border-dashed border-cyan-400/40 py-3">
         <DossierField label="REWARD:" value={ticket.reward} valueClassName="text-cyan-200" />
       </div>
 

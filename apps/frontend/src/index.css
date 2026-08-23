@@ -126,34 +126,39 @@ body {
 
 /* Global subtle scrollbar styles */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(13, 17, 23, 0.95);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
+  background: rgba(34, 211, 238, 0.42);
+  border: 2px solid rgba(13, 17, 23, 0.95);
+  border-radius: 0;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(103, 232, 249, 0.62);
 }
 
 /* Firefox scrollbar styling */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  scrollbar-color: rgba(34, 211, 238, 0.42) rgba(13, 17, 23, 0.95);
 }
 
 .terminal-command-shell {
   z-index: 0;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.015) 0%, rgba(255, 255, 255, 0.04) 100%);
-  box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.2);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.075) 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.3);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 -10px 24px rgba(0, 0, 0, 0.2),
+    inset 0 0 0 1px rgba(34, 211, 238, 0.04);
 }
 
 .terminal-buddy-overlay {
@@ -403,27 +408,20 @@ body {
   }
 }
 
-.terminal-command-line {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.035) 100%);
-}
-
 .terminal-command-row {
   display: flex;
   align-items: center;
-  padding: 0.75rem 0.9rem 0.85rem;
-  background-color: rgba(6, 12, 18, 0.78);
-  border-top: 1px solid rgba(255, 255, 255, 0.03);
+  padding: 0.8rem 0.9rem 0.9rem;
+  background-color: rgba(18, 27, 38, 0.82);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
   transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .terminal-command-row-active {
-  background-color: rgba(10, 18, 27, 0.92);
-  border-top-color: rgba(103, 232, 249, 0.18);
+  background-color: rgba(22, 35, 48, 0.94);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    inset 0 0 0 1px rgba(34, 211, 238, 0.06);
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 0 0 1px rgba(34, 211, 238, 0.1);
 }
 
 .terminal-command-row-disabled {
@@ -506,9 +504,9 @@ body {
   transform: translateY(-50%);
   width: 1ch;
   height: 1.2em;
-  background-color: rgba(125, 211, 252, 0.72);
+  background-color: rgba(125, 211, 252, 0.96);
   border-radius: 1px;
-  box-shadow: 0 0 14px rgba(103, 232, 249, 0.28);
+  box-shadow: 0 0 16px rgba(103, 232, 249, 0.42);
 }
 
 .terminal-command-cursor-blinking {

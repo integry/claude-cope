@@ -159,7 +159,7 @@ export async function consumeQuota(
     cost?: number;
     limits?: QuotaLimits;
   },
-): Promise<{ quotaPercent: number; remaining: number }> {
+): Promise<{ quotaPercent: number; remaining: number; total: number }> {
   const cost = opts.cost ?? 1;
   const limits = opts.limits ?? DEFAULT_LIMITS;
 
@@ -189,7 +189,7 @@ export async function consumeQuota(
       ? storedTotal
       : fallbackProQuotaTotal(remaining, limits.proInitialQuota);
     const quotaPercent = total > 0 ? Math.max(0, (newRemaining / total) * 100) : 0;
-    return { quotaPercent, remaining: newRemaining };
+    return { quotaPercent, remaining: newRemaining, total };
   }
 
   // Free tier
@@ -206,5 +206,5 @@ export async function consumeQuota(
   const quotaPercent = limits.freeLimit > 0
     ? Math.min(100, Math.max(0, ((limits.freeLimit - newUsage) / limits.freeLimit) * 100))
     : 0;
-  return { quotaPercent, remaining: limits.freeLimit - newUsage };
+  return { quotaPercent, remaining: limits.freeLimit - newUsage, total: limits.freeLimit };
 }
